@@ -30,7 +30,17 @@ uint32_t channel[6] =
 			ADC_CHANNEL_13,
 			ADC_CHANNEL_9,
 			ADC_CHANNEL_15,
-			ADC_CHANNEL_8};
+			ADC_CHANNEL_8
+	};
+
+
+//TIM_HandleTypeDef htim1;
+//TIM_HandleTypeDef htim3;
+//TIM_HandleTypeDef htim4;
+//TIM_HandleTypeDef htimx[6] 	= {htim1,htim1,htim1,htim4,htim4,htim3};
+TIM_TypeDef* TIMx[6] 		= {TIM1,TIM1,TIM1,TIM4,TIM4,TIM3};
+uint32_t TIM_CHANNEL_n[6] = {TIM_CHANNEL_3,TIM_CHANNEL_2,TIM_CHANNEL_1,TIM_CHANNEL_4,TIM_CHANNEL_3,TIM_CHANNEL_2};
+
 void digitalWrite(int pin,pin_state state)
 {
 	//if(state==LOW)GPIOG->ODR &= ~(1<<9);

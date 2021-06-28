@@ -43,6 +43,11 @@ typedef enum{LOW,HIGH}pin_state;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LONG_CLICK_MIN 1100
+#define LONG_CLICK_MAX 2000
+#define DOUBLE_CLICK_MIN 10
+#define DOUBLE_CLICK_MAX 200
+#define NOISE_MAX 2
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +65,10 @@ int idx,pinChosen;
 int myPin,myState,is1st;
 extern GPIO_TypeDef* arduino_pin_letter[20];
 extern GPIO_TypeDef* arduino_pin_num[20];
+int32_t t0,t_1st_rising,t_1st_falling,t_2nd_rising,t_2nd_falling,dt;
+int ninterrupt=0;
+
+char str1[100];
 
 /* USER CODE END PV */
 
@@ -116,12 +125,12 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
+//MX_GPIO_Init();
   MX_USART3_UART_Init();
-  MX_ADC3_Init();
-  MX_TIM1_Init();
-  MX_TIM3_Init();
-  MX_TIM4_Init();
+//MX_ADC3_Init();
+//MX_TIM1_Init();
+//MX_TIM3_Init();
+//MX_TIM4_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
@@ -130,6 +139,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
 
   /*************************
    * TEST : analogRead()   *
@@ -151,13 +161,16 @@ int main(void)
 	   HAL_Delay(100);
    }
 
-
+   /*************************************
+    * TEST :TimeSet, AlarmSet, AlarmSong*
+    *************************************/
+	pinMode(13,INPUT);
   /*************************
    * TEST : digitalRead()  *
    *************************/
   pinMode(7,INPUT);
   pinMode(8,INPUT);
-  //char str[100];
+
   sprintf(str,"\r\npin7=%d, pin8=%d\r\n",digitalRead(7),digitalRead(8));
   HAL_UART_Transmit(&huart3,(uint8_t*)str,strlen(str),1000);
      //memset(tx_buf,0,sizeof(tx_buf));
@@ -230,9 +243,71 @@ static void MX_NVIC_Init(void)
   /* USART3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(USART3_IRQn);
+  /* EXTI15_10_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	GPIO_PinState pin;
+	if(GPIO_Pin == GPIO_PIN_13)
+	{
+		pin=HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_13);
+//---------------------------------------------------------------1st rising
+		if(ninterrupt==0 && pin==1)
+		{
+			t_1st_rising = HAL_GetTick();
+			ninterrupt++;
+		}
+//---------------------------------------------------------------1st falling
+		else if(ninterrupt==1 && pin==0)
+		{
+			t_1st_falling = HAL_GetTick();
+			dt = t_1st_falling - t_1st_rising;
+			if(dt>=LONG_CLICK_MIN && dt<=LONG_CLICK_MAX)
+			{
+				sprintf(str1,"LONG CLICK\r\n");
+				ninterrupt=0;
+			}
+			else if(dt>0 && dt<=NOISE_MAX){	ninterrupt=0;}
+			else if(dt>DOUBLE_CLICK_MAX+10 && dt<LONG_CLICK_MIN-10)
+			{
+				sprintf(str1, "Select Key. (interval = %d )\r\n",(int)dt);
+				ninterrupt=0;
+			}
+			else if(dt>=DOUBLE_CLICK_MIN && dt<=DOUBLE_CLICK_MAX){ninterrupt++;}
+		}
+//---------------------------------------------------------------2nd rising
+		else if(ninterrupt == 2 && pin==1)
+		{
+			t_2nd_rising = HAL_GetTick();
+			dt = t_2nd_rising-t_1st_falling;
+			if(dt>=DOUBLE_CLICK_MIN && dt<=DOUBLE_CLICK_MAX)
+			{
+				ninterrupt++;
+			}
+			else ninterrupt=0;
+		}
+//---------------------------------------------------------------2nd falling
+		else if(ninterrupt==3 && pin==0)
+		{
+			t_2nd_falling = HAL_GetTick();
+			dt = t_2nd_falling - t_2nd_rising;
+			if(dt>=DOUBLE_CLICK_MIN && dt<=DOUBLE_CLICK_MAX)
+			{
+				sprintf(str1, "DOUBLE CLICK\r\n");
+				ninterrupt=0;
+			}
+			else ninterrupt=0;
+		}
+		pin = HAL_GPIO_ReadPin(GPIOC,GPIO_PIN_13);
+		HAL_UART_Transmit(&huart3,(uint8_t*)str1,strlen(str1),1000);
+		memset(str1,0,sizeof(str1));
+		dt=0;
+	}
+}
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART3)
